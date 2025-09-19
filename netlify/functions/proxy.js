@@ -7,27 +7,40 @@ export async function handler(event, context) {
   if (!targetUrl) {
     return {
       statusCode: 400,
-      body: "Missing 'url' query parameter"
+      body: JSON.stringify({ error: "Missing 'url' query parameter" }),
     };
   }
 
   try {
     const response = await fetch(targetUrl);
-    const text = await response.text();
 
-    // Scramjet can transform the response if needed
-    const stream = new DataStream([text]);
-    const transformed = await stream.map(chunk => chunk.toUpperCase()).toArray();
+    if (!response.ok) {
+      return {
+        statusCode: response.status,
+        body: `Error fetching URL: ${response.statusText}`,
+      };
+    }
+
+    // Stream and transform response with Scramjet
+    const stream = new DataStream(response.body)
+      .map(chunk => chunk.toString())
+      .map(text => text.toUpperCase()); // Example transformation
+
+    let result = '';
+    await stream.forEach(chunk => result += chunk);
 
     return {
       statusCode: 200,
-      body: transformed.join(''),
-      headers: { "Content-Type": "text/plain" }
+      body: result,
+      headers: {
+        "Content-Type": "text/plain",
+        "Access-Control-Allow-Origin": "*"
+      },
     };
   } catch (err) {
     return {
       statusCode: 500,
-      body: "Error fetching the URL: " + err.message
+      body: `Internal server error: ${err.message}`,
     };
   }
 }
